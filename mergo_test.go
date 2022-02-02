@@ -878,6 +878,10 @@ type structWithBoolPointer struct {
 	C *bool
 }
 
+type structWithIntPointer struct {
+	C *int
+}
+
 func TestBooleanPointer(t *testing.T) {
 	bt, bf := true, false
 	src := structWithBoolPointer{
@@ -936,5 +940,132 @@ func TestMergeSlicesIsNotSupported(t *testing.T) {
 
 	if err := mergo.Merge(&src, &dst, mergo.WithOverride, mergo.WithAppendSlice); err != mergo.ErrNotSupported {
 		t.Errorf("expected %q, got %q", mergo.ErrNotSupported, err)
+	}
+}
+
+func Bool(v bool) *bool { return &v }
+func Int(i int) *int    { return &i }
+
+type customTransformer struct{}
+
+func (t customTransformer) Transformer(typ reflect.Type) func(dst, src reflect.Value) error {
+	if typ == reflect.TypeOf(Bool(false)) || typ == reflect.TypeOf(Int(0)) {
+		return func(dst, src reflect.Value) error {
+			if dst.CanSet() {
+				if src.IsNil() {
+					src.Set(dst)
+				}
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func TestBooleanPointerWithTransformer(t *testing.T) {
+	testCases := []struct {
+		name     string
+		src      *bool
+		dst      *bool
+		expected *bool
+	}{
+		{
+			name:     "do not overwrite if dst is not empty (true)",
+			src:      Bool(false),
+			dst:      Bool(true),
+			expected: Bool(true),
+		},
+		{
+			name:     "do not overwrite if dst is not empty (false)",
+			src:      Bool(true),
+			dst:      Bool(false),
+			expected: Bool(false),
+		},
+		{
+			name:     "overwrite if dst is empty (true)",
+			src:      Bool(true),
+			expected: Bool(true),
+		},
+		{
+			name:     "overwrite if dst is empty (false)",
+			src:      Bool(false),
+			expected: Bool(false),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var src, dst structWithBoolPointer
+			if tc.src != nil {
+				src = structWithBoolPointer{
+					C: tc.src,
+				}
+			}
+			if tc.dst != nil {
+				dst = structWithBoolPointer{
+					C: tc.dst,
+				}
+			}
+
+			if err := mergo.Merge(&dst, src, mergo.WithTransformers(customTransformer{})); err != nil {
+				t.Error(err)
+			}
+			if *dst.C != *tc.expected {
+				t.Errorf("expected %v, got %v", *tc.expected, *dst.C)
+			}
+		})
+	}
+}
+
+func TestIntPointerWithTransformer(t *testing.T) {
+	testCases := []struct {
+		name     string
+		src      *int
+		dst      *int
+		expected *int
+	}{
+		{
+			name:     "do not overwrite if dst is not empty (10)",
+			src:      Int(100),
+			dst:      Int(10),
+			expected: Int(10),
+		},
+		{
+			name:     "do not overwrite if dst is not empty (0)",
+			src:      Int(100),
+			dst:      Int(0),
+			expected: Int(0),
+		},
+		{
+			name:     "overwrite if dst is empty (100)",
+			src:      Int(100),
+			expected: Int(100),
+		},
+		{
+			name:     "overwrite if dst is empty (100)",
+			src:      Int(100),
+			expected: Int(100),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var src, dst structWithIntPointer
+			if tc.src != nil {
+				src = structWithIntPointer{
+					C: tc.src,
+				}
+			}
+			if tc.dst != nil {
+				dst = structWithIntPointer{
+					C: tc.dst,
+				}
+			}
+
+			if err := mergo.Merge(&dst, src, mergo.WithTransformers(customTransformer{})); err != nil {
+				t.Error(err)
+			}
+			if *dst.C != *tc.expected {
+				t.Errorf("expected %v, got %v", *tc.expected, *dst.C)
+			}
+		})
 	}
 }
