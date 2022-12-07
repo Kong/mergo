@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/imdario/mergo"
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 type simpleTest struct {
